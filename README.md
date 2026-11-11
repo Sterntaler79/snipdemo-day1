@@ -1,6 +1,6 @@
 # SnipFrontend
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 19.2.27.
+This project uses Angular 22 and was generated with the [Angular CLI](https://github.com/angular/angular-cli).
 
 ## Development server
 
