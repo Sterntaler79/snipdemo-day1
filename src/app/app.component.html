@@ -21,8 +21,8 @@
         placeholder="Paste a long link here..."
         autocomplete="url"
         inputmode="url"
-        [attr.aria-invalid]="urlControl.invalid && urlControl.touched"
-        [attr.aria-describedby]="urlControl.invalid && urlControl.touched ? 'url-feedback' : null"
+        [attr.aria-invalid]="(urlControl.invalid && urlControl.touched) || submitError() !== null"
+        [attr.aria-describedby]="(urlControl.invalid && urlControl.touched) || submitError() !== null ? 'url-feedback' : null"
       />
       <button type="submit" [disabled]="isSubmitting()">
         @if (isSubmitting()) {
