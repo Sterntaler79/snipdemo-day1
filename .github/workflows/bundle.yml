@@ -1,0 +1,81 @@
+name: Build bundle
+
+on:
+  # This workflow exists only on main, so pushes to component branches cannot trigger it.
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main and submodules
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          submodules: true
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - name: Configure bot identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Configure authenticated pushes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Test CLI
+        run: npm test
+        working-directory: cli
+
+      - name: Test frontend
+        run: |
+          npm ci
+          npm test -- --watch=false
+        working-directory: frontend
+
+      - name: Smoke-test backend API
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd backend && PORT=3000 bun run server.js) > "$RUNNER_TEMP/snip-backend.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/links >/dev/null; then break; fi
+            sleep 1
+          done
+          response=$(curl --fail --silent -X POST http://127.0.0.1:3000/api/links \
+            -H 'content-type: application/json' \
+            -d '{"url":"https://example.com"}')
+          code=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).code)' "$response")
+          status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            "http://127.0.0.1:3000/$code")
+          test "$status" = "302"
+          curl --fail --silent http://127.0.0.1:3000/api/links |
+            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{if(JSON.parse(s)[0]?.hits!==1)process.exit(1)})'
+
+      - name: Build and publish changed bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          before=$(git rev-parse HEAD)
+          node scripts/build-bundle.mjs --push
+          if [ "$(git rev-parse HEAD)" != "$before" ]; then
+            gh workflow run docker.yml --ref main
+          fi
