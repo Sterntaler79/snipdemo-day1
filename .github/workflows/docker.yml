@@ -89,6 +89,32 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
 
+      - name: Smoke-test built image
+        env:
+          IMAGE_REF: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          container=$(docker run --rm -d -p 127.0.0.1:3000:3000 "$IMAGE_REF")
+          trap 'docker stop "$container" >/dev/null' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/links >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:3000/ | grep -qi '<html'
+          status=$(curl --silent --output "$RUNNER_TEMP/snip-link.json" --write-out '%{http_code}' \
+            -X POST http://127.0.0.1:3000/api/links \
+            -H 'content-type: application/json' \
+            -d '{"url":"https://example.com"}')
+          test "$status" = "201"
+          code=$(node -e 'process.stdout.write(require(process.argv[1]).code)' "$RUNNER_TEMP/snip-link.json")
+          status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            "http://127.0.0.1:3000/$code")
+          test "$status" = "302"
+          curl --fail --silent http://127.0.0.1:3000/api/links |
+            node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{if(JSON.parse(s)[0]?.hits!==1)process.exit(1)})'
+          SNIP_API=http://127.0.0.1:3000 node cli/cli.js ls | grep -F 'https://example.com'
+
       - name: Push scanned image tags
         env:
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
