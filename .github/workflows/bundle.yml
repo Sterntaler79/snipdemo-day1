@@ -10,6 +10,10 @@ permissions:
   actions: write
   contents: write
 
+concurrency:
+  group: bundle
+  cancel-in-progress: false
+
 jobs:
   bundle:
     runs-on: ubuntu-latest
@@ -46,7 +50,7 @@ jobs:
       - name: Test frontend
         run: |
           npm ci
-          npm test -- --watch=false
+          npm test -- --watch=false --browsers=ChromeHeadless
         working-directory: frontend
 
       - name: Smoke-test backend API
