@@ -20,7 +20,7 @@ Links are held in memory and are cleared when the backend restarts.
 Clone with submodules populated:
 
 ```sh
-git clone --recurse-submodules https://github.com/kenken64/snipdemo-day1.git
+git clone --recurse-submodules https://github.com/Sterntaler79/snipdemo-day1.git
 ```
 
 A plain clone leaves the component folders empty. If you already cloned without
